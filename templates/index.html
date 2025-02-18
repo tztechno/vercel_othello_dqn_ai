@@ -1,0 +1,173 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Othello</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+        .controls {
+            margin: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 50px);
+            gap: 2px;
+            background-color: #666;
+            padding: 2px;
+            border-radius: 4px;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: #1b8f1b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            cursor: pointer;
+        }
+        .cell:hover {
+            background-color: #147814;
+        }
+        .game-info {
+            margin: 20px;
+            text-align: center;
+        }
+        .valid-move {
+            background-color: #2d2;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Othello</h1>
+    
+    <div class="controls">
+        <div>
+            <input type="radio" id="black" name="color" value="Black (First)" checked>
+            <label for="black">Black (First)</label>
+            <input type="radio" id="white" name="color" value="White (Second)">
+            <label for="white">White (Second)</label>
+        </div>
+        <button id="reset">Reset Game</button>
+    </div>
+    
+    <div class="board" id="board"></div>
+    
+    <div class="game-info">
+        <div id="score"></div>
+        <div id="current-player"></div>
+        <div id="game-status"></div>
+    </div>
+
+    <script>
+        let gameState = {
+            board: Array(8).fill().map(() => Array(8).fill(0)),
+            currentPlayer: 1,
+            validMoves: [],
+            winner: null
+        };
+
+        function initializeGame() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.addEventListener('click', handleMove);
+                    board.appendChild(cell);
+                }
+            }
+            
+            resetGame();
+        }
+
+        function updateBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const i = parseInt(cell.dataset.row);
+                const j = parseInt(cell.dataset.col);
+                const value = gameState.board[i][j];
+                
+                cell.textContent = value === 1 ? '⚫' : value === -1 ? '⚪' : '·';
+                cell.className = 'cell';
+                
+                if (gameState.validMoves.some(([r, c]) => r === i && c === j)) {
+                    cell.classList.add('valid-move');
+                }
+            });
+            
+            // Update game info
+            const blackCount = gameState.board.flat().filter(x => x === 1).length;
+            const whiteCount = gameState.board.flat().filter(x => x === -1).length;
+            document.getElementById('score').textContent = `Score - Black: ${blackCount}, White: ${whiteCount}`;
+            document.getElementById('current-player').textContent = `Current player: ${gameState.currentPlayer === 1 ? 'Black' : 'White'}`;
+            
+            if (gameState.winner !== null) {
+                const status = gameState.winner === 1 ? 'Black wins!' :
+                             gameState.winner === -1 ? 'White wins!' : "It's a tie!";
+                document.getElementById('game-status').textContent = status;
+            } else {
+                document.getElementById('game-status').textContent = 
+                    gameState.validMoves.length === 0 ? 'No valid moves available. Turn passes.' : '';
+            }
+        }
+
+        async function handleMove(event) {
+            const row = parseInt(event.target.dataset.row);
+            const col = parseInt(event.target.dataset.col);
+            
+            const playerColor = document.querySelector('input[name="color"]:checked').value;
+            const isPlayerTurn = (playerColor === "Black (First)" && gameState.currentPlayer === 1) ||
+                               (playerColor === "White (Second)" && gameState.currentPlayer === -1);
+            
+            if (!isPlayerTurn || gameState.winner !== null) return;
+            
+            const response = await fetch('/api/move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ row, col })
+            });
+            
+            gameState = await response.json();
+            updateBoard();
+        }
+
+        async function resetGame() {
+            const playerColor = document.querySelector('input[name="color"]:checked').value;
+            const response = await fetch('/api/reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ player_color: playerColor })
+            });
+            
+            gameState = await response.json();
+            updateBoard();
+        }
+
+        document.getElementById('reset').addEventListener('click', resetGame);
+        document.querySelectorAll('input[name="color"]').forEach(radio => {
+            radio.addEventListener('change', resetGame);
+        });
+
+        initializeGame();
+    </script>
+</body>
+</html>
